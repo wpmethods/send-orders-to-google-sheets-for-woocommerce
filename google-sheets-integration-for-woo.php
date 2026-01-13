@@ -305,7 +305,6 @@ class WPMethods_WC_To_Google_Sheets {
         $script_url = get_option('wpmethods_wc_gs_script_url', '');
         
         if (empty($script_url)) {
-            error_log('WP Methods Google Sheets: Google Apps Script URL not configured');
             return;
         }
         
@@ -323,13 +322,6 @@ class WPMethods_WC_To_Google_Sheets {
             'body' => json_encode($order_data),
             'cookies' => array()
         ));
-        
-        if (is_wp_error($response)) {
-            error_log('WP Methods Google Sheets integration error: ' . $response->get_error_message());
-        } else {
-            // Debug logging for successful submissions
-            error_log('WP Methods Google Sheets: Order ' . $order_id . ' sent successfully');
-        }
     }
     
     /**
