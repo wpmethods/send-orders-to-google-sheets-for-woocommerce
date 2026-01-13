@@ -3,7 +3,7 @@
  * Plugin Name: Google Sheets Integration for WooCommerce by WP Methods
  * Plugin URI: https://wpmethods.com/plugins/google-sheets-integration-for-woocommerce/
  * Description: Send order data to Google Sheets when order status changes to selected statuses
- * Version: 2.0.5
+ * Version: 1.0.0
  * Author: WP Methods
  * Author URI: https://wpmethods.com
  * License: GPL2
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('GS_WC_VERSION', '2.0.5');
+define('GS_WC_VERSION', '1.0.0');
 
 class WPMethods_WC_To_Google_Sheets {
     
@@ -125,6 +125,18 @@ class WPMethods_WC_To_Google_Sheets {
                 'required' => false,
                 'always_include' => false,
                 'icon' => 'dashicons dashicons-category'
+            ),
+            'customer_note' => array(
+                'label' => 'Customer Note',
+                'required' => false,
+                'always_include' => false,
+                'icon' => 'dashicons dashicons-edit'
+            ),
+            'shipping_method' => array(
+                'label' => 'Shipping Method',
+                'required' => false,
+                'always_include' => false,
+                'icon' => 'dashicons dashicons-car'
             )
         );
     }
@@ -424,6 +436,16 @@ class WPMethods_WC_To_Google_Sheets {
                 
             case 'product_categories':
                 return $this->wpmethods_get_order_categories($order);
+            
+            case 'customer_note':
+                return $order->get_customer_note();
+
+            case 'shipping_method':
+                $shipping_methods = array();
+                foreach ($order->get_shipping_methods() as $shipping_item) {
+                    $shipping_methods[] = $shipping_item->get_name();
+                }
+                return implode(', ', $shipping_methods);
                 
             default:
                 return null;
@@ -1054,9 +1076,6 @@ function updateExistingRow(sheet, existingRowIndex, data) {
         }
     });
     
-    // Highlight updated row
-    const rowRange = sheet.getRange(row, 1, 1, fieldOrder.length);
-    rowRange.setBackground('#FFF9C4'); // Light yellow background
 }
 
 function addNewRow(sheet, data) {
@@ -1069,15 +1088,6 @@ function addNewRow(sheet, data) {
     });
     
     sheet.appendRow(rowData);
-    
-    // Apply alternating row colors for readability
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-        const rowRange = sheet.getRange(lastRow, 1, 1, fieldOrder.length);
-        if (lastRow % 2 === 0) {
-            rowRange.setBackground('#F5F5F5'); // Light gray for even rows
-        }
-    }
 }
 
 function getFieldKeyFromLabel(fieldLabel) {
