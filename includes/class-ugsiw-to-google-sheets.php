@@ -130,6 +130,12 @@ class UGSIW_To_Google_Sheets {
                 'required' => false,
                 'always_include' => false,
                 'icon' => 'dashicons dashicons-car'
+            ),
+            'product_type' => array(
+                'label' => 'Product Type',
+                'required' => false,
+                'always_include' => false,
+                'icon' => 'dashicons dashicons-tag'
             )
         );
     }
@@ -247,6 +253,46 @@ class UGSIW_To_Google_Sheets {
         
         return $selected_categories;
     }
+
+    /**
+     * Get product types from order
+     */
+    private function get_order_product_types($order) {
+        $product_types = array();
+        
+        foreach ($order->get_items() as $item) {
+            $product = $item->get_product();
+            
+            if ($product) {
+                $product_type = $product->get_type();
+                
+                // Map WooCommerce product types to readable names
+                $type_mapping = array(
+                    'simple' => 'Simple',
+                    'variable' => 'Variable',
+                    'variation' => 'Variation',
+                    'grouped' => 'Grouped',
+                    'external' => 'External/Affiliate',
+                    'subscription' => 'Subscription',
+                    'variable-subscription' => 'Variable Subscription',
+                    'booking' => 'Booking'
+                );
+                
+                $readable_type = isset($type_mapping[$product_type]) 
+                    ? $type_mapping[$product_type] 
+                    : ucfirst($product_type);
+                    
+                $product_types[] = $readable_type;
+            } else {
+                // Product might be deleted
+                $product_types[] = 'Unknown/Deleted';
+            }
+        }
+        
+        $product_types = array_unique($product_types);
+        
+        return !empty($product_types) ? implode(', ', $product_types) : 'Simple';
+    }
     
     /**
      * Check if order contains products from selected categories
@@ -304,14 +350,14 @@ class UGSIW_To_Google_Sheets {
         $order_data = $this->wpmethods_prepare_order_data($order);
         
         // Add retry mechanism for failed requests
-        $max_retries = 3;
-        $retry_delay = 2; // seconds
+        $max_retries = 1;
+        $retry_delay = 1; // seconds
         
         for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
             $response = wp_remote_post($script_url, array(
                 'method' => 'POST',
-                'timeout' => 30, // Increased timeout
-                'redirection' => 5,
+                'timeout' => 5, // Increased timeout
+                'redirection' => 2,
                 'httpversion' => '1.1',
                 'blocking' => true,
                 'headers' => array(
@@ -456,6 +502,9 @@ class UGSIW_To_Google_Sheets {
                 
             case 'product_categories':
                 return $this->wpmethods_get_order_categories($order);
+
+            case 'product_type':
+                return $this->get_order_product_types($order);
             
             case 'customer_note':
                 return $order->get_customer_note();
@@ -945,22 +994,7 @@ class UGSIW_To_Google_Sheets {
                         ?>
                     </p>
                 </div>
-                
-                <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 6px; border-left: 4px solid #2196F3;">
-                    <h4 style="margin-top: 0; color: #1565c0;">
-                        <span class="dashicons dashicons-info"></span> Smart Updates
-                    </h4>
-                    <p style="margin: 10px 0 0 0; color: #1565c0;">
-                        <strong>Orders are updated, not duplicated!</strong> When an order status changes, the plugin will:
-                    </p>
-                    <ol style="margin: 10px 0 0 20px; color: #1565c0;">
-                        <li>Check if the Order ID already exists in the sheet</li>
-                        <li>If found: Update the existing row with new status/data</li>
-                        <li>If not found: Create a new row</li>
-                        <li>Column A (Order ID) is used to track and prevent duplicates</li>
-                    </ol>
-                </div>
-                
+
                 <?php if ($monthly_sheets === '1'): ?>
                     <div style="margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4CAF50;">
                         <h4 style="margin-top: 0; color: #2e7d32;">

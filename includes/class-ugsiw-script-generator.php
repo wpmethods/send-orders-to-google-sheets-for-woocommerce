@@ -77,6 +77,26 @@ class UGSIW_Script_Generator {
         $script .= "      console.log('Sheet initialized with headers:', headers);\n";
         $script .= "    }\n\n";
 
+        $script .= "// Function to format date columns\n";
+        $script .= "function formatDateColumns(sheet, headers) {\n";
+        $script .= "  const orderDateIndex = headers.indexOf('Order Date');\n";
+        $script .= "  const lastUpdatedIndex = headers.indexOf('Last Updated');\n";
+        $script .= "  \n";
+        $script .= "  if (orderDateIndex !== -1) {\n";
+        $script .= "    const orderDateColumn = orderDateIndex + 1;\n";
+        $script .= "    const range = sheet.getRange(2, orderDateColumn, sheet.getLastRow() - 1, 1);\n";
+        $script .= "    // Set number format to date/time\n";
+        $script .= "    range.setNumberFormat('yyyy-mm-dd hh:mm:ss');\n";
+        $script .= "  }\n";
+        $script .= "  \n";
+        $script .= "  if (lastUpdatedIndex !== -1) {\n";
+        $script .= "    const lastUpdatedColumn = lastUpdatedIndex + 1;\n";
+        $script .= "    const range = sheet.getRange(2, lastUpdatedColumn, sheet.getLastRow() - 1, 1);\n";
+        $script .= "    // Set number format to date/time\n";
+        $script .= "    range.setNumberFormat('yyyy-mm-dd hh:mm:ss');\n";
+        $script .= "  }\n";
+        $script .= "}\n\n";
+
         $script .= "    // Find order ID column index\n";
         $script .= "    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];\n";
         $script .= "    const orderIdColumn = headers.indexOf('Order ID') + 1;\n";
@@ -186,6 +206,9 @@ class UGSIW_Script_Generator {
         $script .= "  // Add the row\n";
         $script .= "  sheet.appendRow(rowData);\n";
         $script .= "  const newRow = sheet.getLastRow();\n";
+        $script .= "  \n";
+        $script .= "  // Format date columns\n";
+        $script .= "  formatDateColumns(sheet, headers);\n";
         $script .= "  \n";
         $script .= "  console.log('Added new order', data.order_id, 'in row', newRow);\n";
         $script .= "  return newRow;\n";
@@ -400,11 +423,17 @@ class UGSIW_Script_Generator {
         $script .= "  // Find 'Last Updated' column\n";
         $script .= "  const lastUpdatedIndex = headers.indexOf('Last Updated');\n";
         $script .= "  if (lastUpdatedIndex !== -1) {\n";
-        $script .= "    // Set the timestamp in existing 'Last Updated' column\n";
-        $script .= "    sheet.getRange(row, lastUpdatedIndex + 1).setValue(new Date());\n";
+        $script .= "    // Set the timestamp in existing 'Last Updated' column with proper formatting\n";
+        $script .= "    const now = new Date();\n";
+        $script .= "    // Format as YYYY-MM-DD HH:MM:SS to match Order Date format\n";
+        $script .= "    const formattedDate = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');\n";
+        $script .= "    sheet.getRange(row, lastUpdatedIndex + 1).setValue(formattedDate);\n";
         $script .= "  } else {\n";
         $script .= "    console.error('Last Updated column not found in headers:', headers);\n";
         $script .= "  }\n";
+        $script .= "  \n";
+        $script .= "  // Format date columns\n";
+        $script .= "  formatDateColumns(sheet, headers);\n";
         $script .= "  \n";
         $script .= "  console.log('Updated order', data.order_id, 'in row', row);\n";
         $script .= "}\n\n";
@@ -428,11 +457,14 @@ class UGSIW_Script_Generator {
         $script .= "    }\n";
         $script .= "  });\n";
         $script .= "  \n";
-        $script .= "  // Add timestamp for Last Updated column\n";
+        $script .= "  // Add timestamp for Last Updated column with proper formatting\n";
         $script .= "  const lastUpdatedIndex = headers.indexOf('Last Updated');\n";
         $script .= "  if (lastUpdatedIndex !== -1) {\n";
+        $script .= "    const now = new Date();\n";
+        $script .= "    // Format as YYYY-MM-DD HH:MM:SS to match Order Date format\n";
+        $script .= "    const formattedDate = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');\n";
         $script .= "    // Insert timestamp at the correct position\n";
-        $script .= "    rowData[lastUpdatedIndex] = new Date();\n";
+        $script .= "    rowData[lastUpdatedIndex] = formattedDate;\n";
         $script .= "  }\n";
         $script .= "  \n";
         $script .= "  // Add the row\n";
@@ -441,7 +473,7 @@ class UGSIW_Script_Generator {
         $script .= "  \n";
         $script .= "  console.log('Added new order', data.order_id, 'in row', newRow);\n";
         $script .= "  return newRow;\n";
-        $script .= "}\n\n";
+        $script .= "}\n";
 
         $script .= "function getFieldKeyFromLabel(label) {\n";
         $script .= "  const fieldMap = {$field_mapping_js};\n";
