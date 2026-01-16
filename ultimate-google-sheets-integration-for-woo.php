@@ -31,7 +31,5 @@ require_once UGSIW_WPMETHODS_PATH . 'includes/file-autoloader.php';
 
 // Initialize
 add_action('plugins_loaded', function() {
-    if (is_admin()) {
-        new UGSIW\UGSIW_To_Google_Sheets();
-    } 
+    new UGSIW\UGSIW_To_Google_Sheets();
 });
