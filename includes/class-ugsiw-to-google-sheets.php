@@ -571,6 +571,59 @@ class UGSIW_To_Google_Sheets {
             case 'product_categories':
                 return $this->wpmethods_get_order_categories($order);
 
+            case 'product_sku':
+                $skus = array();
+                foreach ($order->get_items() as $item) {
+                    $product = $item->get_product();
+                    if ($product && method_exists($product, 'get_sku')) {
+                        $sku = $product->get_sku();
+                        if (!empty($sku)) {
+                            $skus[] = $sku;
+                        }
+                    } else {
+                        $skus[] = '';
+                    }
+                }
+                $skus = array_filter($skus, function($v) { return $v !== ''; });
+                return !empty($skus) ? implode(', ', $skus) : '';
+
+            case 'product_quantity':
+                $quantities = array();
+                foreach ($order->get_items() as $item) {
+                    $qty = $item->get_quantity();
+                    $quantities[] = $qty;
+                }
+                return !empty($quantities) ? implode(', ', $quantities) : '';
+
+            case 'product_price':
+                $prices = array();
+                $currency = $order->get_currency();
+                $currency_symbol = get_woocommerce_currency_symbol($currency);
+                // Decode HTML entities like &#2547; and remove non-breaking spaces
+                $currency_symbol = html_entity_decode($currency_symbol, ENT_QUOTES, 'UTF-8');
+                $currency_symbol = str_replace("\xc2\xa0", ' ', $currency_symbol);
+                $decimals = function_exists('wc_get_price_decimals') ? wc_get_price_decimals() : 2;
+                foreach ($order->get_items() as $item) {
+                    $qty = max(1, (int) $item->get_quantity());
+                    $per_item_price = $qty ? ($item->get_total() / $qty) : $item->get_total();
+                    $formatted = number_format((float) $per_item_price, $decimals, '.', '');
+                    $prices[] = $currency_symbol . $formatted;
+                }
+                return !empty($prices) ? implode(', ', $prices) : '';
+
+            case 'product_total':
+                $totals = array();
+                $currency = $order->get_currency();
+                $currency_symbol = get_woocommerce_currency_symbol($currency);
+                $currency_symbol = html_entity_decode($currency_symbol, ENT_QUOTES, 'UTF-8');
+                $currency_symbol = str_replace("\xc2\xa0", ' ', $currency_symbol);
+                $decimals = function_exists('wc_get_price_decimals') ? wc_get_price_decimals() : 2;
+                foreach ($order->get_items() as $item) {
+                    $formatted = number_format((float) $item->get_total(), $decimals, '.', '');
+                    $totals[] = $currency_symbol . $formatted;
+                }
+                return !empty($totals) ? implode(', ', $totals) : '';
+
             case 'product_type':
                 return $this->get_order_product_types($order);
             
@@ -578,11 +631,33 @@ class UGSIW_To_Google_Sheets {
                 return $order->get_customer_note();
 
             case 'shipping_method':
-                $shipping_methods = array();
+                $shipping_entries = array();
+                $currency = $order->get_currency();
+                $currency_symbol = get_woocommerce_currency_symbol($currency);
+                $currency_symbol = html_entity_decode($currency_symbol, ENT_QUOTES, 'UTF-8');
+                $currency_symbol = str_replace("\xc2\xa0", ' ', $currency_symbol);
+                $decimals = function_exists('wc_get_price_decimals') ? wc_get_price_decimals() : 2;
                 foreach ($order->get_shipping_methods() as $shipping_item) {
-                    $shipping_methods[] = $shipping_item->get_name();
+                    $name = '';
+                    if (method_exists($shipping_item, 'get_method_title') && !empty($shipping_item->get_method_title())) {
+                        $name = $shipping_item->get_method_title();
+                    } elseif (method_exists($shipping_item, 'get_name') && !empty($shipping_item->get_name())) {
+                        $name = $shipping_item->get_name();
+                    } else {
+                        $name = method_exists($order, 'get_shipping_method') ? $order->get_shipping_method() : '';
+                    }
+                    $total = 0;
+                    if (method_exists($shipping_item, 'get_total')) {
+                        $total = (float) $shipping_item->get_total();
+                    }
+                    if ($total !== 0) {
+                        $formatted = number_format($total, $decimals, '.', '');
+                        $shipping_entries[] = trim($name . ' - ' . $currency_symbol . $formatted);
+                    } else {
+                        $shipping_entries[] = trim($name);
+                    }
                 }
-                return implode(', ', $shipping_methods);
+                return !empty($shipping_entries) ? implode(', ', $shipping_entries) : '';
                 
             default:
                 return null;
