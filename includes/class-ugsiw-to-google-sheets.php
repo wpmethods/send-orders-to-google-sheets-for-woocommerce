@@ -417,20 +417,20 @@ class UGSIW_To_Google_Sheets {
         $order_data = $this->wpmethods_prepare_order_data($order);
         
         // Add retry mechanism for failed requests
-        $max_retries = 1;
+        $max_retries = 2;
         $retry_delay = 1; // seconds
         
         for ($attempt = 1; $attempt <= $max_retries; $attempt++) {
             $response = wp_remote_post($script_url, array(
                 'method' => 'POST',
-                'timeout' => 5, // Increased timeout
+                'timeout' => 20, // Increased timeout for Apps Script
                 'redirection' => 2,
                 'httpversion' => '1.1',
                 'blocking' => true,
                 'headers' => array(
                     'Content-Type' => 'application/json',
                 ),
-                'body' => json_encode($order_data),
+                'body' => wp_json_encode($order_data),
                 'data_format' => 'body'
             ));
             
@@ -443,13 +443,50 @@ class UGSIW_To_Google_Sheets {
                     $data = json_decode($body, true);
                     
                     if (isset($data['status']) && $data['status'] === 'success') {
+                        // If Pro and webhook forwarding enabled, also forward the same payload to the webhook
+                        if ($this->is_pro_active && get_option('ugsiw_gs_forward_webhook', '0') === '1') {
+                            $webhook = get_option('ugsiw_gs_webhook_url', '');
+                            if (!empty($webhook)) {
+                                $hook_response = wp_remote_post($webhook, array(
+                                    'method' => 'POST',
+                                    'timeout' => 10,
+                                    'redirection' => 2,
+                                    'httpversion' => '1.1',
+                                    'blocking' => true,
+                                    'headers' => array('Content-Type' => 'application/json'),
+                                    'body' => wp_json_encode($order_data),
+                                    'data_format' => 'body'
+                                ));
+
+                                if (is_wp_error($hook_response)) {
+                                    error_log('UGSIW Webhook Forward Error: ' . $hook_response->get_error_message());
+                                } else {
+                                    $hook_code = wp_remote_retrieve_response_code($hook_response);
+                                    if ($hook_code !== 200 && $hook_code !== 201) {
+                                        $hook_body = wp_remote_retrieve_body($hook_response);
+                                        $hook_clean = wp_strip_all_tags($hook_body);
+                                        if (is_string($hook_clean) && strlen($hook_clean) > 200) {
+                                            $hook_clean = substr($hook_clean, 0, 200) . '...';
+                                        }
+                                        error_log('UGSIW Webhook Forward HTTP code: ' . $hook_code . ' Response: ' . $hook_clean . ' for order ' . $order_id);
+                                    }
+                                }
+                            }
+                        }
+
                         error_log('Google Sheets Integration: Order ' . $order_id . ' sent successfully. Attempt: ' . $attempt);
                         return; // Exit on success
                     } else {
                         error_log('Google Sheets Integration: Order ' . $order_id . ' - API returned error: ' . print_r($data, true));
                     }
                 } else {
-                    error_log('Google Sheets Integration: Order ' . $order_id . ' - HTTP Error: ' . $response_code);
+                    $body = wp_remote_retrieve_body($response);
+                    // Keep logs concise: strip HTML and truncate long responses
+                    $clean_body = wp_strip_all_tags($body);
+                    if (is_string($clean_body) && strlen($clean_body) > 200) {
+                        $clean_body = substr($clean_body, 0, 200) . '...';
+                    }
+                    error_log('Google Sheets Integration: Order ' . $order_id . ' - HTTP Error: ' . $response_code . ' Response: ' . $clean_body);
                 }
             } else {
                 error_log('Google Sheets Integration: Order ' . $order_id . ' - WP Error: ' . $response->get_error_message());
@@ -799,6 +836,8 @@ class UGSIW_To_Google_Sheets {
             register_setting('ugsiw_gs_settings', 'ugsiw_gs_product_sheets', array($this, 'wpmethods_sanitize_checkbox'));
             register_setting('ugsiw_gs_settings', 'ugsiw_gs_custom_sheet_name', array($this, 'wpmethods_sanitize_text'));
             register_setting('ugsiw_gs_settings', 'ugsiw_gs_custom_name_template', array($this, 'wpmethods_sanitize_text'));
+            register_setting('ugsiw_gs_settings', 'ugsiw_gs_forward_webhook', array($this, 'wpmethods_sanitize_checkbox'));
+            register_setting('ugsiw_gs_settings', 'ugsiw_gs_webhook_url', array($this, 'wpmethods_sanitize_text'));
         }
         
         // Main settings section
@@ -846,6 +885,15 @@ class UGSIW_To_Google_Sheets {
             'ugsiw_gs_script_url',
             'Google Apps Script URL',
             array($this, 'wpmethods_script_url_render'),
+            'ugsiw_gs_settings',
+            'ugsiw_gs_section'
+        );
+
+        // Pro webhook forwarding field
+        add_settings_field(
+            'ugsiw_gs_forward_webhook',
+            'Forward Orders to Webhook (Pro)',
+            array($this, 'wpmethods_forward_webhook_render'),
             'ugsiw_gs_settings',
             'ugsiw_gs_section'
         );
@@ -1113,6 +1161,34 @@ class UGSIW_To_Google_Sheets {
             </span>
         </label>
         <p class="description" style="margin-top: 10px;">When enabled, a new sheet will be automatically created for each month (e.g., "January 2024", "February 2024")</p>
+        <?php
+    }
+
+    /**
+     * Forward to webhook render (Pro)
+     */
+    public function wpmethods_forward_webhook_render() {
+        if (!$this->is_pro_active) {
+            echo '<div style="padding: 20px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 6px; border-left: 4px solid #ffc107;">';
+            echo '<p style="margin: 0; color: #856404; font-weight: 600;">';
+            echo '<span class="dashicons dashicons-lock" style="color: #ffc107;"></span> ';
+            echo 'This is a Pro feature. <a href="admin.php?page=ugsiw-license" style="color: #856404; text-decoration: underline;">Upgrade to Pro</a> to enable webhook forwarding.';
+            echo '</p>';
+            echo '</div>';
+            return;
+        }
+
+        $enabled = get_option('ugsiw_gs_forward_webhook', '0');
+        $url = get_option('ugsiw_gs_webhook_url', '');
+        ?>
+        <div style="display:flex;gap:12px;align-items:center;">
+            <label style="display:inline-flex;align-items:center;gap:8px;padding:10px;background:#f8f9fa;border-radius:6px;border:1px solid #e0e0e0;">
+                <input type="checkbox" name="ugsiw_gs_forward_webhook" value="1" <?php checked($enabled, '1'); ?> style="width:18px;height:18px;">
+                <span style="font-weight:500;">Enable forwarding to webhook</span>
+            </label>
+            <input type="url" name="ugsiw_gs_webhook_url" value="<?php echo esc_attr($url); ?>" placeholder="https://hooks.example.com/xyz" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:6px;">
+        </div>
+        <p class="description" style="margin-top:8px;">When enabled, order data will also be POSTed as JSON to the webhook URL you provide. Useful for Zapier, Integromat, or custom endpoints.</p>
         <?php
     }
     
