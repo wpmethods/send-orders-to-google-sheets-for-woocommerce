@@ -5,7 +5,6 @@
 namespace UGSIW;
 use UGSIW\UGSIW_Script_Generator;
 
-
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -13,8 +12,12 @@ if (!defined('ABSPATH')) {
 class UGSIW_To_Google_Sheets {
     
     private $available_fields = array();
+    private $is_pro_active = false;
     
     public function __construct() {
+        // Check if Pro version is active
+        $this->is_pro_active = apply_filters('is_active_ultimate_ugsiw_pro_feature', false);
+        
         // Define available fields
         $this->define_available_fields();
         
@@ -138,6 +141,54 @@ class UGSIW_To_Google_Sheets {
                 'icon' => 'dashicons dashicons-tag'
             )
         );
+        
+        // Add pro fields if license is active
+        if ($this->is_pro_active) {
+            $this->available_fields = array_merge($this->available_fields, array(
+                'customer_id' => array(
+                    'label' => 'Customer ID',
+                    'required' => false,
+                    'always_include' => false,
+                    'icon' => 'dashicons dashicons-id',
+                    'pro' => true
+                ),
+                'coupon_used' => array(
+                    'label' => 'Coupon Used',
+                    'required' => false,
+                    'always_include' => false,
+                    'icon' => 'dashicons dashicons-tag',
+                    'pro' => true
+                ),
+                'product_sku' => array(
+                    'label' => 'Product SKU',
+                    'required' => false,
+                    'always_include' => false,
+                    'icon' => 'dashicons dashicons-barcode',
+                    'pro' => true
+                ),
+                'product_quantity' => array(
+                    'label' => 'Product Quantity',
+                    'required' => false,
+                    'always_include' => false,
+                    'icon' => 'dashicons dashicons-editor-ol',
+                    'pro' => true
+                ),
+                'product_price' => array(
+                    'label' => 'Product Price',
+                    'required' => false,
+                    'always_include' => false,
+                    'icon' => 'dashicons dashicons-money-alt',
+                    'pro' => true
+                ),
+                'product_total' => array(
+                    'label' => 'Product Total',
+                    'required' => false,
+                    'always_include' => false,
+                    'icon' => 'dashicons dashicons-calculator',
+                    'pro' => true
+                )
+            ));
+        }
     }
     
     /**
@@ -306,8 +357,25 @@ class UGSIW_To_Google_Sheets {
             $product = $item->get_product();
             
             if ($product) {
-                $product_categories = wp_get_post_terms($product->get_id(), 'product_cat', array('fields' => 'ids'));
-                
+                // Determine correct product ID (handle variations)
+                $product_id = $product->get_id();
+                if (method_exists($product, 'is_type') && $product->is_type('variation')) {
+                    // Prefer parent ID for variations
+                    if (method_exists($product, 'get_parent_id')) {
+                        $parent_id = $product->get_parent_id();
+                        if ($parent_id) {
+                            $product_id = $parent_id;
+                        }
+                    } elseif (method_exists($item, 'get_variation_id')) {
+                        $variation_parent = $item->get_variation_id();
+                        if ($variation_parent) {
+                            $product_id = $variation_parent;
+                        }
+                    }
+                }
+
+                $product_categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'ids'));
+
                 if (!empty(array_intersect($product_categories, $selected_categories))) {
                     return true;
                 }
@@ -529,10 +597,27 @@ class UGSIW_To_Google_Sheets {
         
         foreach ($order->get_items() as $item) {
             $product = $item->get_product();
-            
             if ($product) {
-                $categories = wp_get_post_terms($product->get_id(), 'product_cat', array('fields' => 'names'));
-                $all_categories = array_merge($all_categories, $categories);
+                // Resolve parent/product id for variations
+                $product_id = $product->get_id();
+                if (method_exists($product, 'is_type') && $product->is_type('variation')) {
+                    if (method_exists($product, 'get_parent_id')) {
+                        $parent_id = $product->get_parent_id();
+                        if ($parent_id) {
+                            $product_id = $parent_id;
+                        }
+                    } elseif (method_exists($item, 'get_variation_id')) {
+                        $variation_parent = $item->get_variation_id();
+                        if ($variation_parent) {
+                            $product_id = $variation_parent;
+                        }
+                    }
+                }
+
+                $categories = wp_get_post_terms($product_id, 'product_cat', array('fields' => 'names'));
+                if (is_array($categories) && !empty($categories)) {
+                    $all_categories = array_merge($all_categories, $categories);
+                }
             }
         }
         
@@ -545,12 +630,13 @@ class UGSIW_To_Google_Sheets {
      * Add admin menu
      */
     public function wpmethods_add_admin_menu() {
-        add_options_page(
+        add_menu_page(
             'WooCommerce to Google Sheets',
-            'WC to Google Sheets',
+            'WC Orders to Google Sheets',
             'manage_options',
             'wpmethods-wc-to-google-sheets',
-            array($this, 'wpmethods_settings_page')
+            array($this, 'wpmethods_settings_page'),
+            'dashicons-google'
         );
     }
     
@@ -558,7 +644,7 @@ class UGSIW_To_Google_Sheets {
      * Admin scripts
      */
     public function wpmethods_admin_scripts($hook) {
-        if ($hook != 'settings_page_wpmethods-wc-to-google-sheets') {
+        if ($hook != 'toplevel_page_wpmethods-wc-to-google-sheets') {
             return;
         }
 
@@ -588,6 +674,15 @@ class UGSIW_To_Google_Sheets {
         register_setting('ugsiw_gs_settings', 'ugsiw_gs_selected_fields', array($this, 'wpmethods_sanitize_array'));
         register_setting('ugsiw_gs_settings', 'ugsiw_gs_monthly_sheets', array($this, 'wpmethods_sanitize_checkbox'));
         
+        // Pro settings (only if active)
+        if ($this->is_pro_active) {
+            register_setting('ugsiw_gs_settings', 'ugsiw_gs_sheet_mode', array($this, 'wpmethods_sanitize_text'));
+            register_setting('ugsiw_gs_settings', 'ugsiw_gs_daily_weekly', array($this, 'wpmethods_sanitize_text'));
+            register_setting('ugsiw_gs_settings', 'ugsiw_gs_product_sheets', array($this, 'wpmethods_sanitize_checkbox'));
+            register_setting('ugsiw_gs_settings', 'ugsiw_gs_custom_sheet_name', array($this, 'wpmethods_sanitize_text'));
+            register_setting('ugsiw_gs_settings', 'ugsiw_gs_custom_name_template', array($this, 'wpmethods_sanitize_text'));
+        }
+        
         // Main settings section
         add_settings_section(
             'ugsiw_gs_section',
@@ -612,6 +707,33 @@ class UGSIW_To_Google_Sheets {
             'ugsiw_gs_section'
         );
         
+        // Pro settings fields
+        if ($this->is_pro_active) {
+            add_settings_field(
+                'ugsiw_gs_daily_weekly',
+                'Daily/Weekly Sheets',
+                array($this, 'wpmethods_daily_weekly_render'),
+                'ugsiw_gs_settings',
+                'ugsiw_gs_section'
+            );
+            
+            add_settings_field(
+                'ugsiw_gs_product_sheets',
+                'Product-wise Sheets',
+                array($this, 'wpmethods_product_sheets_render'),
+                'ugsiw_gs_settings',
+                'ugsiw_gs_section'
+            );
+            
+            add_settings_field(
+                'ugsiw_gs_custom_sheet_name',
+                'Custom Sheet Naming',
+                array($this, 'wpmethods_custom_sheet_name_render'),
+                'ugsiw_gs_settings',
+                'ugsiw_gs_section'
+            );
+        }
+        
         add_settings_field(
             'ugsiw_gs_product_categories',
             'Product Categories Filter',
@@ -635,6 +757,156 @@ class UGSIW_To_Google_Sheets {
             'ugsiw_gs_settings',
             'ugsiw_gs_section'
         );
+    }
+
+
+    /**
+     * Sanitize text input
+     */
+    public function wpmethods_sanitize_text($input) {
+        return sanitize_text_field($input);
+    }
+    
+    /**
+     * Daily/Weekly Sheets field render - PRO FEATURE
+     */
+    public function wpmethods_daily_weekly_render() {
+        if (!$this->is_pro_active) {
+            echo '<div style="padding: 20px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 6px; border-left: 4px solid #ffc107;">';
+            echo '<p style="margin: 0; color: #856404; font-weight: 600;">';
+            echo '<span class="dashicons dashicons-lock" style="color: #ffc107;"></span> ';
+            echo 'This is a Pro feature. <a href="admin.php?page=ugsiw-license" style="color: #856404; text-decoration: underline;">Upgrade to Pro</a> to unlock Daily/Weekly Sheets.';
+            echo '</p>';
+            echo '</div>';
+            return;
+        }
+        
+        $value = get_option('ugsiw_gs_daily_weekly', 'none');
+        ?>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px;">
+            <label style="display: flex; align-items: center; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e0e0e0; cursor: pointer;">
+                <input type="radio" name="ugsiw_gs_daily_weekly" value="none" <?php checked($value, 'none'); ?>>
+                <span style="font-weight: 500;">
+                    <span class="dashicons dashicons-no" style="color: #dc3545;"></span>
+                    None
+                </span>
+            </label>
+            
+            <label style="display: flex; align-items: center; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e0e0e0; cursor: pointer;">
+                <input type="radio" name="ugsiw_gs_daily_weekly" value="daily" <?php checked($value, 'daily'); ?>>
+                <span style="font-weight: 500;">
+                    <span class="dashicons dashicons-calendar" style="color: #28a745;"></span>
+                    Daily Sheets
+                </span>
+            </label>
+            
+            <label style="display: flex; align-items: center; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e0e0e0; cursor: pointer;">
+                <input type="radio" name="ugsiw_gs_daily_weekly" value="weekly" <?php checked($value, 'weekly'); ?>>
+                <span style="font-weight: 500;">
+                    <span class="dashicons dashicons-calendar-alt" style="color: #007bff;"></span>
+                    Weekly Sheets
+                </span>
+            </label>
+        </div>
+        <p class="description" style="margin-top: 10px;">
+            <span class="dashicons dashicons-star-filled" style="color: #ffc107;"></span>
+            Pro Feature: Automatically create new sheets daily or weekly. Orders will be organized by date.
+        </p>
+        <?php
+    }
+
+
+    /**
+     * Product-wise Sheets field render - PRO FEATURE
+     */
+    public function wpmethods_product_sheets_render() {
+        if (!$this->is_pro_active) {
+            echo '<div style="padding: 20px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 6px; border-left: 4px solid #ffc107;">';
+            echo '<p style="margin: 0; color: #856404; font-weight: 600;">';
+            echo '<span class="dashicons dashicons-lock" style="color: #ffc107;"></span> ';
+            echo 'This is a Pro feature. <a href="admin.php?page=ugsiw-license" style="color: #856404; text-decoration: underline;">Upgrade to Pro</a> to unlock Product-wise Sheets.';
+            echo '</p>';
+            echo '</div>';
+            return;
+        }
+        
+        $value = get_option('ugsiw_gs_product_sheets', '0');
+        ?>
+        <label style="display: inline-flex; align-items: center; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e0e0e0;">
+            <input type="checkbox" name="ugsiw_gs_product_sheets" value="1" <?php checked($value, '1'); ?> style="width: 20px; height: 20px;">
+            <span style="font-weight: 500; font-size: 14px;">
+                <span class="dashicons dashicons-category" style="color: #667eea;"></span>
+                Enable Product Category Sheets
+            </span>
+        </label>
+        <p class="description" style="margin-top: 10px;">
+            <span class="dashicons dashicons-star-filled" style="color: #ffc107;"></span>
+            Pro Feature: Create separate sheets for each product category. Orders will be sorted into their respective category sheets.
+        </p>
+        <?php
+    }
+    
+    /**
+     * Custom Sheet Naming field render - PRO FEATURE
+     */
+    public function wpmethods_custom_sheet_name_render() {
+        if (!$this->is_pro_active) {
+            echo '<div style="padding: 20px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 6px; border-left: 4px solid #ffc107;">';
+            echo '<p style="margin: 0; color: #856404; font-weight: 600;">';
+            echo '<span class="dashicons dashicons-lock" style="color: #ffc107;"></span> ';
+            echo 'This is a Pro feature. <a href="admin.php?page=ugsiw-license" style="color: #856404; text-decoration: underline;">Upgrade to Pro</a> to unlock Custom Sheet Naming.';
+            echo '</p>';
+            echo '</div>';
+            return;
+        }
+        
+        $enabled = get_option('ugsiw_gs_custom_sheet_name', '0');
+        $template = get_option('ugsiw_gs_custom_name_template', 'Orders - {month} {year}');
+        ?>
+        <div style="margin-bottom: 15px;">
+            <label style="display: inline-flex; align-items: center; gap: 10px; padding: 15px; background: #f8f9fa; border-radius: 6px; border: 1px solid #e0e0e0;">
+                <input type="checkbox" name="ugsiw_gs_custom_sheet_name" value="1" <?php checked($enabled, '1'); ?> id="ugsiw_custom_sheet_toggle" style="width: 20px; height: 20px;">
+                <span style="font-weight: 500; font-size: 14px;">
+                    <span class="dashicons dashicons-edit" style="color: #667eea;"></span>
+                    Enable Custom Sheet Names
+                </span>
+            </label>
+        </div>
+        
+        <div id="ugsiw_custom_name_template" style="<?php echo $enabled !== '1' ? 'display: none;' : ''; ?> margin-top: 15px; padding: 20px; background: #f8f9ff; border-radius: 6px; border: 1px solid #e0e0e0;">
+            <input type="text" name="ugsiw_gs_custom_name_template" value="<?php echo esc_attr($template); ?>" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;" placeholder="Enter custom sheet name template">
+            
+            <div style="margin-top: 15px; padding: 15px; background: #fff; border-radius: 4px; border: 1px solid #e0e0e0;">
+                <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px;">Available Variables:</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; font-size: 12px;">
+                    <code style="padding: 5px; background: #f1f1f1; border-radius: 3px;">{month}</code>
+                    <code style="padding: 5px; background: #f1f1f1; border-radius: 3px;">{year}</code>
+                    <code style="padding: 5px; background: #f1f1f1; border-radius: 3px;">{day}</code>
+                    <code style="padding: 5px; background: #f1f1f1; border-radius: 3px;">{week}</code>
+                    <code style="padding: 5px; background: #f1f1f1; border-radius: 3px;">{site_name}</code>
+                    <code style="padding: 5px; background: #f1f1f1; border-radius: 3px;">{order_count}</code>
+                </div>
+                <p style="margin-top: 10px; margin-bottom: 0; font-size: 12px; color: #666;">Example: <code>{site_name} - {month} {year}</code> would create "My Store - January 2024"</p>
+            </div>
+        </div>
+        
+        <p class="description" style="margin-top: 10px;">
+            <span class="dashicons dashicons-star-filled" style="color: #ffc107;"></span>
+            Pro Feature: Customize sheet names using templates and variables.
+        </p>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            $('#ugsiw_custom_sheet_toggle').change(function() {
+                if ($(this).is(':checked')) {
+                    $('#ugsiw_custom_name_template').slideDown();
+                } else {
+                    $('#ugsiw_custom_name_template').slideUp();
+                }
+            });
+        });
+        </script>
+        <?php
     }
     
     /**
@@ -875,14 +1147,28 @@ class UGSIW_To_Google_Sheets {
 
         // Check if monthly sheets option is enabled
         $monthly_sheets = get_option('ugsiw_gs_monthly_sheets', '0');
-        
-        // Generate Google Apps Script code using the separate generator
-        $script = $this->script_generator->generate_script($selected_fields, ($monthly_sheets === '1'));
-        
+
+        // Collect pro-feature options to pass to the generator
+        $daily_weekly = get_option('ugsiw_gs_daily_weekly', 'none');
+        $product_sheets = get_option('ugsiw_gs_product_sheets', '0');
+        $custom_sheet_name = get_option('ugsiw_gs_custom_sheet_name', '0');
+        $custom_template = get_option('ugsiw_gs_custom_name_template', 'Orders - {month} {year}');
+
+        $pro_features = array(
+            'daily_weekly'    => $daily_weekly,
+            'product_sheets'  => ($product_sheets === '1' || $product_sheets === 1 || $product_sheets === true),
+            'custom_sheet_name'=> ($custom_sheet_name === '1' || $custom_sheet_name === 1 || $custom_sheet_name === true),
+            'custom_template' => $custom_template,
+        );
+
+        // Generate Google Apps Script code using the separate generator (pass pro features)
+        $script = $this->script_generator->generate_script($selected_fields, ($monthly_sheets === '1'), $pro_features);
+
         wp_send_json_success(array(
             'script' => $script,
             'fields' => $selected_fields,
-            'monthly_sheets' => $monthly_sheets
+            'monthly_sheets' => $monthly_sheets,
+            'pro_features' => $pro_features,
         ));
     }
     
@@ -890,21 +1176,39 @@ class UGSIW_To_Google_Sheets {
     /**
      * Settings page with modern design
      */
-    public function wpmethods_settings_page() {
+     public function wpmethods_settings_page() {
         $selected_statuses = get_option('ugsiw_gs_order_statuses', array());
         $selected_fields = $this->wpmethods_get_selected_fields();
         $monthly_sheets = get_option('ugsiw_gs_monthly_sheets', '0');
         $selected_categories = $this->wpmethods_get_selected_categories();
+        
+        // Pro features
+        $daily_weekly = get_option('ugsiw_gs_daily_weekly', 'none');
+        $product_sheets = get_option('ugsiw_gs_product_sheets', '0');
+        $custom_sheet_name = get_option('ugsiw_gs_custom_sheet_name', '0');
         ?>
         <div class="wrap wpmethods-settings-wrapper">
             
-            <!-- Modern Header -->
+            <!-- Modern Header with Pro badge -->
             <div class="wpmethods-header">
                 <h1>
                     <span class="dashicons dashicons-google" style="vertical-align: middle; margin-right: 10px;"></span>
                     WooCommerce to Google Sheets
+                    <?php if ($this->is_pro_active): ?>
+                    <span style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 12px; padding: 4px 10px; border-radius: 20px; vertical-align: middle; margin-left: 10px;">PRO</span>
+                    <?php endif; ?>
                 </h1>
                 <p>Automatically send WooCommerce orders to Google Sheets. Configure your integration below.</p>
+                
+                <?php if (!$this->is_pro_active): ?>
+                <div style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #ffc107; max-width: 600px;">
+                    <p style="margin: 0; color: #856404; font-weight: 600;">
+                        <span class="dashicons dashicons-unlock" style="color: #ffc107;"></span>
+                        Want Daily/Weekly Sheets, Product-wise Sheets, and Custom Sheet Naming? 
+                        <a href="admin.php?page=ugsiw-license" style="color: #856404; text-decoration: underline; font-weight: 700;">Upgrade to Pro</a>
+                    </p>
+                </div>
+                <?php endif; ?>
             </div>
             
             <!-- Dashboard Stats -->
@@ -924,18 +1228,52 @@ class UGSIW_To_Google_Sheets {
                             <div class="wpmethods-stat-number"><?php echo $monthly_sheets === '1' ? '✓' : '—'; ?></div>
                             <div class="wpmethods-stat-label">Monthly Sheets</div>
                         </div>
+                        <?php if ($this->is_pro_active): ?>
+                        <div class="wpmethods-stat">
+                            <div class="wpmethods-stat-number">
+                                <?php 
+                                $pro_features_active = 0;
+                                if ($daily_weekly !== 'none') $pro_features_active++;
+                                if ($product_sheets === '1') $pro_features_active++;
+                                if ($custom_sheet_name === '1') $pro_features_active++;
+                                echo $pro_features_active;
+                                ?>
+                            </div>
+                            <div class="wpmethods-stat-label">Pro Features</div>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
                 
-                <div class="wpmethods-card">
-                    <h3><span class="dashicons dashicons-lightbulb"></span> Quick Tips</h3>
+                <!-- Pro Features Card -->
+                <?php if (!$this->is_pro_active): ?>
+                <div class="wpmethods-card" style="border: 2px solid #ffc107;">
+                    <h3 style="color: #ffc107;">
+                        <span class="dashicons dashicons-star-filled"></span> Unlock Pro Features
+                    </h3>
                     <ul style="margin: 0; padding-left: 20px; color: #666;">
-                        <li style="margin-bottom: 8px;">Orders are updated, not duplicated when status changes</li>
-                        <li style="margin-bottom: 8px;">Column A (Order ID) is used to track and update existing orders</li>
-                        <li style="margin-bottom: 8px;">Test with one order status first</li>
-                        <li>Watch the setup video for detailed instructions</li>
+                        <li style="margin-bottom: 8px;">✅ Daily/Weekly Sheets - Auto creation</li>
+                        <li style="margin-bottom: 8px;">✅ Product-wise Sheets - Category based</li>
+                        <li style="margin-bottom: 8px;">✅ Custom Sheet Naming - Flexible templates</li>
+                        <li style="margin-bottom: 8px;">✅ Advanced Field Mapping - Extra fields</li>
+                        <li style="margin-bottom: 8px;">✅ Priority Support - Fast help</li>
+                    </ul>
+                    <a href="admin.php?page=ugsiw-license" class="wpmethods-button" style="margin-top: 15px; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
+                        <span class="dashicons dashicons-unlock"></span> Upgrade to Pro
+                    </a>
+                </div>
+                <?php else: ?>
+                <div class="wpmethods-card" style="border: 2px solid #28a745;">
+                    <h3 style="color: #28a745;">
+                        <span class="dashicons dashicons-awards"></span> Pro Features Active
+                    </h3>
+                    <ul style="margin: 0; padding-left: 20px; color: #666;">
+                        <li style="margin-bottom: 8px; color: #28a745;">✓ Daily/Weekly Sheets: <strong><?php echo esc_html(ucfirst($daily_weekly)); ?></strong></li>
+                        <li style="margin-bottom: 8px; color: #28a745;">✓ Product-wise Sheets: <strong><?php echo $product_sheets === '1' ? 'Enabled' : 'Disabled'; ?></strong></li>
+                        <li style="margin-bottom: 8px; color: #28a745;">✓ Custom Sheet Naming: <strong><?php echo $custom_sheet_name === '1' ? 'Enabled' : 'Disabled'; ?></strong></li>
                     </ul>
                 </div>
+                <?php endif; ?>
             </div>
             
             <!-- Main Settings Form -->
