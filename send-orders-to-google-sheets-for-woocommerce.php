@@ -1,13 +1,13 @@
 <?php
 /**
- * Plugin Name: Send WooCommerce Orders to Google Sheets
+ * Plugin Name: Send Orders to Google Sheets for WooCommerce
  * Plugin URI: https://wpmethods.com/plugins/google-sheets-integration-for-woocommerce/
  * Description: Send order data to Google Sheets when order status changes to selected statuses
  * Version: 1.0.0
  * Author: WP Methods
  * Author URI: https://wpmethods.com
  * License: GPL2
- * Text Domain: send-woocommerce-orders-to-google-sheet
+ * Text Domain: send-orders-to-google-sheets-for-woocommerce
  * Domain Path: /languages
  * Requires at least: 5.9
  * Requires PHP: 7.4

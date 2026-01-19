@@ -16,8 +16,7 @@ class UGSIW_To_Google_Sheets {
     
     public function __construct() {
         // Check if Pro version is active
-        $this->is_pro_active = apply_filters('is_active_ultimate_ugsiw_pro_feature', false);
-        
+        $this->is_pro_active = apply_filters('ugsiw_is_active_pro_feature', false);
         // Define available fields
         $this->define_available_fields();
         
@@ -237,7 +236,7 @@ class UGSIW_To_Google_Sheets {
     public function wpmethods_woocommerce_missing_notice() {
         ?>
         <div class="notice notice-error">
-            <p><?php esc_html_e('WP Methods WooCommerce to Google Sheets requires WooCommerce to be installed and activated.', 'send-woocommerce-orders-to-google-sheet'); ?></p>
+            <p><?php esc_html_e('WP Methods WooCommerce to Google Sheets requires WooCommerce to be installed and activated.', 'send-orders-to-google-sheets-for-woocommerce'); ?></p>
         </div>
         <?php
     }
@@ -426,7 +425,10 @@ class UGSIW_To_Google_Sheets {
                 ));
 
                 if (is_wp_error($hook_response)) {
-                    error_log('UGSIW Webhook Forward Error (fallback): ' . $hook_response->get_error_message());
+                    // Log WP error
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log('UGSIW Webhook Error: ' . $hook_response->get_error_message());
+                    }
                 } else {
                     $hook_code = wp_remote_retrieve_response_code($hook_response);
                     if ($hook_code !== 200 && $hook_code !== 201) {
@@ -486,7 +488,9 @@ class UGSIW_To_Google_Sheets {
                 }
             } else {
                 // Log WP error
-                error_log('UGSIW Google Sheets Error: ' . $response->get_error_message());
+                if (defined('WP_DEBUG') && WP_DEBUG) {
+                    error_log('UGSIW Apps Script Error: ' . $response->get_error_message());
+                }
             }
             
             // If not last attempt, wait and retry
@@ -1085,7 +1089,7 @@ class UGSIW_To_Google_Sheets {
             $modes = array('none' => 'None', 'monthly' => 'Monthly', 'daily' => 'Daily', 'weekly' => 'Weekly', 'product' => 'Product-wise', 'custom' => 'Custom');
             foreach ($modes as $k => $label) {
                 $active = ($value === $k) ? 'font-weight:700;color:#222;' : 'color:#7a6a2b;';
-                echo '<div style="padding:10px 12px;border-radius:6px;background:#fff;opacity:0.9;border:1px solid #f0e6c8;'.$active.'">'.$label.' <span style="background:#ffc107;color:#663c00;padding:2px 6px;border-radius:12px;font-size:11px;margin-left:6px;">PRO</span></div>';
+                echo '<div style="padding:10px 12px;border-radius:6px;background:#fff;opacity:0.9;border:1px solid #f0e6c8;'.esc_attr($active).'">'.esc_html($label).' <span style="background:#ffc107;color:#663c00;padding:2px 6px;border-radius:12px;font-size:11px;margin-left:6px;">PRO</span></div>';
             }
             echo '</div>';
             echo '</div>';
@@ -1168,7 +1172,7 @@ class UGSIW_To_Google_Sheets {
             echo '<div style="padding: 20px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 6px; border-left: 4px solid #ffc107;">';
             echo '<p style="margin: 0; color: #856404; font-weight: 600;">';
             echo '<span class="dashicons dashicons-lock" style="color: #ffc107;"></span> ';
-            echo 'This is a Pro feature. <a href="' . (class_exists('UGSIW\Ugsiw_License_Settings') ? admin_url('admin.php?page=ugsiw-license') : 'https://wpmethods.com/product/send-woocommerce-orders-to-google-sheet/') . '" style="color: #856404; text-decoration: underline;">Upgrade to Pro</a> to enable webhook forwarding.';
+            echo 'This is a Pro feature. <a href="' . (class_exists('UGSIW\Ugsiw_License_Settings') ? esc_attr(admin_url('admin.php?page=ugsiw-license')) : 'https://wpmethods.com/product/send-orders-to-google-sheets-for-woocommerce/') . '" style="color: #856404; text-decoration: underline;">Upgrade to Pro</a> to enable webhook forwarding.';
             echo '</p>';
             echo '</div>';
             return;
@@ -1308,10 +1312,10 @@ class UGSIW_To_Google_Sheets {
         
         foreach ($this->available_fields as $field_key => $field_info) {
             $checked = in_array($field_key, $selected_fields) ? 'checked' : '';
-            $required = (isset($field_info['required']) && $field_info['required']) ? ' <span class="required">Required</span>' : '';
+            $required = (isset($field_info['required']) && $field_info['required']) ? true : false;
             $is_pro_field = isset($field_info['pro']) && $field_info['pro'];
             $disabled = '';
-            $pro_badge = '';
+            $pro_badge = false;
 
             // Disable Required fields
             if (isset($field_info['required']) && $field_info['required']) {
@@ -1320,7 +1324,7 @@ class UGSIW_To_Google_Sheets {
             
             if ($is_pro_field && !$this->is_pro_active) {
                 $disabled = 'disabled';
-                $pro_badge = ' <span style="background:#ffc107;color:#663c00;padding:3px 6px;border-radius:12px;font-size:11px;margin-left:8px;">PRO</span>';
+                $pro_badge = true;
             }
             $icon = isset($field_info['icon']) ? $field_info['icon'] : 'dashicons dashicons-admin-generic';
             ?>
@@ -1331,7 +1335,7 @@ class UGSIW_To_Google_Sheets {
                            <?php echo esc_attr($checked); ?> <?php echo esc_attr($disabled); ?>>
                     <span class="<?php echo esc_attr($icon); ?>" style="color: #667eea;"></span>
                     <span><?php echo esc_html($field_info['label']); ?></span>
-                    <?php echo $required; ?><?php echo $pro_badge; ?>
+                    <?php if($required) echo ' <span class="required">Required</span>'; ?><?php if($pro_badge) echo ' <span style="background:#ffc107;color:#663c00;padding:3px 6px;border-radius:12px;font-size:11px;margin-left:8px;">PRO</span>'; ?>
                 </label>
             </div>
             <?php
@@ -1523,8 +1527,15 @@ class UGSIW_To_Google_Sheets {
                                     $checked = '✓';
                                 }
                             ?>
-                            <div class="wpmethods-stat-number"><?php echo $checked; ?></div>
+                            <div class="wpmethods-stat-number"><?php echo esc_html($checked); ?></div>
                             <div class="wpmethods-stat-label"><?php echo esc_html($mode_label); ?></div>
+                        </div>
+
+                        <div class="wpmethods-stat">
+                            <div class="wpmethods-stat-number">
+                                <?php echo $this->is_pro_active ? 'Active' : 'Free'; ?>
+                            </div>
+                            <div class="wpmethods-stat-label">License Status</div>
                         </div>
                         
                     </div>
@@ -1544,11 +1555,11 @@ class UGSIW_To_Google_Sheets {
                         <li style="margin-bottom: 8px;">✅ Priority Support - Fast help</li>
                     </ul>
                     <?php if (class_exists('UGSIW\Ugsiw_License_Settings')): ?>
-                    <a href="<?php echo admin_url('admin.php?page=ugsiw-license'); ?>" class="wpmethods-button" style="margin-top: 15px; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
+                    <a href="<?php echo esc_attr(admin_url('admin.php?page=ugsiw-license')); ?>" class="wpmethods-button" style="margin-top: 15px; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
                         <span class="dashicons dashicons-unlock"></span> Active License
                     </a>
                     <?php else: ?>
-                    <a href="https://wpmethods.com/product/send-woocommerce-orders-to-google-sheet/" class="wpmethods-button" style="margin-top: 15px; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
+                    <a href="https://wpmethods.com/product/send-orders-to-google-sheets-for-woocommerce/" class="wpmethods-button" style="margin-top: 15px; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
                         <span class="dashicons dashicons-unlock"></span> Upgrade to Pro
                     </a>
                     <?php endif; ?>
@@ -1644,6 +1655,7 @@ class UGSIW_To_Google_Sheets {
 
 
             <!-- More Products Section -->
+            <?php if (!defined('UGSIW_PRO_VERSION')): ?>
             <div class="wpmethods-products-box">
                 <h3><span class="dashicons dashicons-products"></span> More Products by WP Methods</h3>
                 <p style="margin-bottom: 20px;">Check out our other products that might interest you.</p>
@@ -1651,42 +1663,42 @@ class UGSIW_To_Google_Sheets {
                 <div class="wpmethods-products-grid">
                     <!-- Product 1 -->
                     <div class="wpmethods-product-card">
-                        <img src="https://wpmethods.com/media/2025/01/Click-Shop-wordpress-theme.jpg" alt="Click Shop - Ecommerce Wordpress Theme">
+                        <img src="<?php echo esc_url(UGSIW_WPMETHODS_URL); ?>assets/img/Click-Shop-wordpress-theme.webp" alt="Click Shop - Ecommerce Wordpress Theme">
                         <h4>Click Shop - Ecommerce Wordpress Theme</h4>
                         <a href="https://wpmethods.com/product/click-shop-wordpress-landing-page-type-ecommerce-theme/" target="_blank" class="wpmethods-product-button">Get it</a>
                     </div>
                     
                     <!-- Product 2 -->
                     <div class="wpmethods-product-card">
-                        <img src="https://wpmethods.com/media/2025/07/bdexchanger-dollar-buy-sell-php-script-or-money-exchanger-ex.webp" alt="BDExchanger || PHP Script for Dollar Buy Sell">
+                        <img src="<?php echo esc_url(UGSIW_WPMETHODS_URL); ?>assets/img/bdexchanger-dollar-buy-sell-php-script-or-money-exchanger-ex.webp" alt="BDExchanger || PHP Script for Dollar Buy Sell">
                         <h4>BDExchanger || PHP Script for Dollar Buy Sell</h4>
                         <a href="https://wpmethods.com/product/bdexchanger-php-script-for-dollar-buy-sell-or-currency-exchanger/" target="_blank" class="wpmethods-product-button">Get it</a>
                     </div>
                     
                     <!-- Product 3 -->
                     <div class="wpmethods-product-card">
-                        <img src="https://wpmethods.com/media/2025/05/Social-Chat-Floating-Icons-WordPress-Plugin.webp" alt="Social Chat Floating Icons Wordpress Plugin">
+                        <img src="<?php echo esc_url(UGSIW_WPMETHODS_URL); ?>assets/img/Social-Chat-Floating-Icons-WordPress-Plugin.webp" alt="Social Chat Floating Icons Wordpress Plugin">
                         <h4>Social Chat Floating Icons Wordpress Plugin</h4>
                         <a href="https://wpmethods.com/product/social-chat-floating-icons-wordpress-plugin/" target="_blank" class="wpmethods-product-button">Get it</a>
                     </div>
                     
                     <!-- Product 4 -->
                     <div class="wpmethods-product-card">
-                        <img src="https://wpmethods.com/media/2022/12/How-to-Show-Recent-WooCommerce-Order-List-Table-with-Elementor-Addon-Orders-Frontend.jpg" alt="WooCommerce Order List Table on eCommerce Website">
+                        <img src="<?php echo esc_url(UGSIW_WPMETHODS_URL); ?>assets/img/How-to-Show-Recent-WooCommerce-Order-List-Table-with-Elementor-Addon-Orders-Frontend.webp" alt="WooCommerce Order List Table on eCommerce Website">
                         <h4>WooCommerce Order List Table on eCommerce Website</h4>
                         <a href="https://wpmethods.com/product/woocommerce-order-list-table-on-ecommerce-website-elementor-addon/" target="_blank" class="wpmethods-product-button">Get it</a>
                     </div>
                     
                     <!-- Product 5 -->
                     <div class="wpmethods-product-card">
-                        <img src="https://wpmethods.com/media/2024/12/Book-Shop-Multi-Seller-banner.jpg" alt="Multi-Vendor Book Selling Website Backup File">
+                        <img src="<?php echo esc_url(UGSIW_WPMETHODS_URL); ?>assets/img/Book-Shop-Multi-Seller-banner.webp" alt="Multi-Vendor Book Selling Website Backup File">
                         <h4>Multi-Vendor Book Selling Website Backup File</h4>
                         <a href="https://wpmethods.com/product/multi-vendor-book-selling-website-to-sell-pdf-hardcover-books/" target="_blank" class="wpmethods-product-button">Get it</a>
                     </div>
 
                     <!-- Product 6 -->
                     <div class="wpmethods-product-card">
-                        <img src="https://wpmethods.com/media/2023/10/single-product-landing-page-with-woocommerce-checkout-form-copy.jpg" alt="Multi-Vendor Book Selling Website Backup File">
+                        <img src="<?php echo esc_url(UGSIW_WPMETHODS_URL); ?>assets/img/single-product-landing-page-with-woocommerce-checkout-form-copy.webp" alt="Multi-Vendor Book Selling Website Backup File">
                         <h4>Single Product Landing Page with WooCommerce</h4>
                         <a href="https://wpmethods.com/product/single-product-landing-page-with-woocommerce-checkout-order-form/" target="_blank" class="wpmethods-product-button">Get it</a>
                     </div>
@@ -1696,8 +1708,6 @@ class UGSIW_To_Google_Sheets {
                     <a href="https://wpmethods.com/" target="_blank" class="wpmethods-button">View More Products</a>
                 </div>
             </div>
-
-
             
             <!-- Donation Section -->
             <div class="wpmethods-donation-box">
@@ -1707,7 +1717,7 @@ class UGSIW_To_Google_Sheets {
                     <span class="dashicons dashicons-coffee"></span> Buy Me a Coffee
                 </a>
             </div>
-            
+            <?php endif; ?>
         </div>
         <?php
     }

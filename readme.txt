@@ -1,4 +1,4 @@
-=== Send WooCommerce Orders to Google Sheet ===
+=== Send Orders to Google Sheets for WooCommerce===
 Contributors: wpmethods, ajharrashed
 Tags: google sheet woocommerce, integrate google sheet, google sheets, google sheet
 Requires at least: 5.9
