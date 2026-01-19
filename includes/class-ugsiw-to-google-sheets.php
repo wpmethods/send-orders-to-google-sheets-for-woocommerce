@@ -15,11 +15,10 @@ class UGSIW_To_Google_Sheets {
     private $is_pro_active = false;
     
     public function __construct() {
-        // Check if Pro version is active
-        $this->is_pro_active = apply_filters('ugsiw_is_active_pro_feature', false);
         // Define available fields
         $this->define_available_fields();
-        
+        // Check if Pro version is active
+        $this->is_pro_active = apply_filters('ugsiw_is_active_pro_feature', false);
         // Check if WooCommerce is active
         add_action('admin_init', array($this, 'ugsiw_check_woocommerce'));
 
@@ -165,6 +164,13 @@ class UGSIW_To_Google_Sheets {
                 'required' => false,
                 'always_include' => false,
                 'icon' => 'dashicons dashicons-welcome-widgets-menus',
+                'pro' => true
+            ),
+            'product_image_link' => array(
+                'label' => 'Product Image Link',
+                'required' => false,
+                'always_include' => false,
+                'icon' => 'dashicons dashicons-format-image',
                 'pro' => true
             ),
             'product_quantity' => array(
@@ -802,6 +808,38 @@ class UGSIW_To_Google_Sheets {
                 }
                 $skus = array_filter($skus, function($v) { return $v !== ''; });
                 return !empty($skus) ? implode(', ', $skus) : '';
+
+            case 'product_image_link':
+                $images = array();
+                foreach ($order->get_items() as $item) {
+                    $product = $item->get_product();
+                    if ($product) {
+                        $image_id = 0;
+                        if (method_exists($product, 'get_image_id')) {
+                            $image_id = $product->get_image_id();
+                        } elseif (function_exists('get_post_thumbnail_id')) {
+                            $image_id = get_post_thumbnail_id($product->get_id());
+                        }
+
+                        if ($image_id) {
+                            $url = wp_get_attachment_image_url($image_id, 'full');
+                            if ($url) {
+                                $images[] = $url;
+                                continue;
+                            }
+                        }
+
+                        // Fallback: try to extract src from product->get_image() HTML
+                        if (method_exists($product, 'get_image')) {
+                            $html = $product->get_image();
+                            if (preg_match('/src=["\']?([^"\'> ]+)/', $html, $m)) {
+                                $images[] = $m[1];
+                            }
+                        }
+                    }
+                }
+                $images = array_filter(array_unique($images));
+                return !empty($images) ? implode(', ', $images) : '';
 
             case 'product_quantity':
                 $quantities = array();
