@@ -1,4 +1,4 @@
-=== Ultimate Google Sheets Integration for WooCommerce ===
+=== Send WooCommerce Orders to Google Sheet ===
 Contributors: wpmethods, ajharrashed
 Tags: google sheet woocommerce, integrate google sheet, google sheets, google sheet
 Requires at least: 5.9
@@ -29,6 +29,14 @@ Streamline your order management, reporting, and data analysis with seamless, re
 ✅ Auto-generated Scripts: Plugin generates ready-to-use Google Apps Script code
 ✅ One-Click Deployment: Copy-paste setup with no coding required
 ✅ Smart Sheet Management: Auto-creates headers and manages existing order updates
+
+
+= ★ Pro Features =
+✅ Daily/Weekly/Monthly Sheets - Auto creation
+✅ Product-wise Sheets - Category based
+✅ Custom Sheet Naming - Flexible templates
+✅ Custom Webhook - Send data to external services
+✅ Priority Support - Fast help
 
 
 Made with love by [WP Methods](https://wpmethods.com)

@@ -237,7 +237,7 @@ class UGSIW_To_Google_Sheets {
     public function wpmethods_woocommerce_missing_notice() {
         ?>
         <div class="notice notice-error">
-            <p><?php esc_html_e('WP Methods WooCommerce to Google Sheets requires WooCommerce to be installed and activated.', 'ultimate-google-sheets-integration-for-woo'); ?></p>
+            <p><?php esc_html_e('WP Methods WooCommerce to Google Sheets requires WooCommerce to be installed and activated.', 'send-woocommerce-orders-to-google-sheet'); ?></p>
         </div>
         <?php
     }
@@ -1168,7 +1168,7 @@ class UGSIW_To_Google_Sheets {
             echo '<div style="padding: 20px; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 6px; border-left: 4px solid #ffc107;">';
             echo '<p style="margin: 0; color: #856404; font-weight: 600;">';
             echo '<span class="dashicons dashicons-lock" style="color: #ffc107;"></span> ';
-            echo 'This is a Pro feature. <a href="admin.php?page=ugsiw-license" style="color: #856404; text-decoration: underline;">Upgrade to Pro</a> to enable webhook forwarding.';
+            echo 'This is a Pro feature. <a href="' . (class_exists('UGSIW\Ugsiw_License_Settings') ? admin_url('admin.php?page=ugsiw-license') : 'https://wpmethods.com/product/send-woocommerce-orders-to-google-sheet/') . '" style="color: #856404; text-decoration: underline;">Upgrade to Pro</a> to enable webhook forwarding.';
             echo '</p>';
             echo '</div>';
             return;
@@ -1481,22 +1481,12 @@ class UGSIW_To_Google_Sheets {
             <div class="wpmethods-header">
                 <h1>
                     <span class="dashicons dashicons-google" style="vertical-align: middle; margin-right: 10px;"></span>
-                    WooCommerce to Google Sheets
+                    Send WooCommerce Orders to Google Sheets
                     <?php if ($this->is_pro_active): ?>
                     <span style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 12px; padding: 4px 10px; border-radius: 20px; vertical-align: middle; margin-left: 10px;">PRO</span>
                     <?php endif; ?>
                 </h1>
                 <p>Automatically send WooCommerce orders to Google Sheets. Configure your integration below.</p>
-                
-                <?php if (!$this->is_pro_active): ?>
-                <div style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #ffc107; max-width: 600px;">
-                    <p style="margin: 0; color: #856404; font-weight: 600;">
-                        <span class="dashicons dashicons-unlock" style="color: #ffc107;"></span>
-                        Want Daily/Weekly Sheets, Product-wise Sheets, and Custom Sheet Naming? 
-                        <a href="admin.php?page=ugsiw-license" style="color: #856404; text-decoration: underline; font-weight: 700;">Upgrade to Pro</a>
-                    </p>
-                </div>
-                <?php endif; ?>
             </div>
             
             <!-- Dashboard Stats -->
@@ -1547,15 +1537,21 @@ class UGSIW_To_Google_Sheets {
                         <span class="dashicons dashicons-star-filled"></span> Unlock Pro Features
                     </h3>
                     <ul style="margin: 0; padding-left: 20px; color: #666;">
-                        <li style="margin-bottom: 8px;">✅ Daily/Weekly Sheets - Auto creation</li>
+                        <li style="margin-bottom: 8px;">✅ Daily/Weekly/Monthly Sheets - Auto creation</li>
                         <li style="margin-bottom: 8px;">✅ Product-wise Sheets - Category based</li>
                         <li style="margin-bottom: 8px;">✅ Custom Sheet Naming - Flexible templates</li>
-                        <li style="margin-bottom: 8px;">✅ Advanced Field Mapping - Extra fields</li>
+                        <li style="margin-bottom: 8px;">✅ Custom Webhook - Send data to external services</li>
                         <li style="margin-bottom: 8px;">✅ Priority Support - Fast help</li>
                     </ul>
-                    <a href="admin.php?page=ugsiw-license" class="wpmethods-button" style="margin-top: 15px; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
+                    <?php if (class_exists('UGSIW\Ugsiw_License_Settings')): ?>
+                    <a href="<?php echo admin_url('admin.php?page=ugsiw-license'); ?>" class="wpmethods-button" style="margin-top: 15px; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
+                        <span class="dashicons dashicons-unlock"></span> Active License
+                    </a>
+                    <?php else: ?>
+                    <a href="https://wpmethods.com/product/send-woocommerce-orders-to-google-sheet/" class="wpmethods-button" style="margin-top: 15px; background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
                         <span class="dashicons dashicons-unlock"></span> Upgrade to Pro
                     </a>
+                    <?php endif; ?>
                 </div>
                 <?php endif; ?>
             </div>
